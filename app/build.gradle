@@ -1,0 +1,275 @@
+apply plugin: 'com.android.application'
+
+
+import com.android.annotations.NonNull
+import com.android.build.api.transform.*
+import com.android.build.gradle.internal.pipeline.TransformManager
+import org.apache.commons.io.FileUtils
+import org.objectweb.asm.*
+import org.objectweb.asm.commons.AdviceAdapter
+import org.objectweb.asm.commons.Method
+
+android {
+    compileSdkVersion 26
+    buildToolsVersion "26.0.0"
+    defaultConfig {
+        applicationId "com.example.transformtest"
+        minSdkVersion 14
+        targetSdkVersion 26
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    registerTransform(new MyTransform())
+}
+
+
+class MyTransform extends Transform {
+
+
+    @Override
+    public String getName() {
+        return "AAA";
+    }
+
+    @Override
+    public Set<QualifiedContent.ContentType> getInputTypes() {
+        return TransformManager.CONTENT_CLASS;
+    }
+
+    @Override
+    public Set<QualifiedContent.Scope> getScopes() {
+        return TransformManager.SCOPE_FULL_PROJECT;
+    }
+
+    @Override
+    public boolean isIncremental() {
+        return false;
+    }
+
+    @Override
+    public void transform(
+            @NonNull com.android.build.api.transform.Context context,
+            @NonNull Collection<TransformInput> inputs,
+            @NonNull Collection<TransformInput> referencedInputs,
+            @com.android.annotations.Nullable TransformOutputProvider outputProvider,
+            boolean isIncremental) throws IOException, TransformException, InterruptedException {
+
+        for (TransformInput input : inputs) {
+            Collection<DirectoryInput> dirInputs = input.getDirectoryInputs();
+            Collection<JarInput> jarInputs = input.getJarInputs();
+            for (DirectoryInput directoryInput : dirInputs) {
+                println("transform DirectoryInput:" + directoryInput.getFile().absolutePath);
+
+                doASMTest(directoryInput.getFile().absolutePath)
+
+                File dest = outputProvider.getContentLocation(directoryInput.getName(),
+                        directoryInput.getContentTypes(), directoryInput.getScopes(), Format.DIRECTORY);
+                println("transform DirectoryOutput:" + dest.getAbsolutePath());
+                FileUtils.copyDirectory(directoryInput.getFile(), dest);
+            }
+            for (JarInput jarInput : jarInputs) {
+                println("transform jarInput:" + jarInput.getFile().absolutePath);
+                String destName = jarInput.getName();
+                File dest = outputProvider.getContentLocation(destName,
+                        jarInput.getContentTypes(), jarInput.getScopes(), Format.JAR);
+                println("transform jarOutput:" + dest.getAbsolutePath());
+                FileUtils.copyFile(jarInput.getFile(), dest);
+            }
+        }
+
+    }
+
+    public static void doASMTest(String rootFolder) {
+
+        Iterator iter = FileUtils.iterateFiles(new File(rootFolder), null, true);
+        while (iter.hasNext()) {
+            File file = (File) iter.next();
+
+            if ("MainActivity.class".equals(file.getName())) {
+                byte[] src = getByteArrayFromFile(file)
+                ClassReader cr = new ClassReader(src)
+                ClassWriter cw = new ClassWriter(cr, 0)
+
+                ClassVisitor cv = cw;
+                cv = new MyVisitorHello(Opcodes.ASM5, cv)
+                cr.interfaces.each { interfaceName ->
+                    println("class impl:" + interfaceName)
+
+                    if(interfaceName.equals("android/view/View\$OnClickListener")) {
+                        cv = new MyVisitorClick(Opcodes.ASM5, cv)
+                    }
+                }
+
+                cr.accept(cv, ClassReader.EXPAND_FRAMES | ClassReader.SKIP_FRAMES)
+                byte[] res = cw.toByteArray();
+                this.writeToFile(file, res)
+
+
+            }
+        }
+    }
+
+    static class MyVisitorHello extends ClassVisitor {
+
+        MyVisitorHello(int i, ClassVisitor classVisitor) {
+            super(i, classVisitor)
+        }
+
+        @Override
+        void visit(int i, int i1, String s, String s1, String s2, String[] strings) {
+            super.visit(i, i1, s, s1, s2, strings)
+        }
+
+        @Override
+        MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] strings) {
+
+            println(name)
+            if (!"hello".equals(name)) {
+                return super.visitMethod(access, name, desc, signature, strings)
+            }
+
+            MethodVisitor mv = super.visitMethod(access, name, desc, signature, strings)
+
+            AdviceAdapter newMv = new AdviceAdapter(Opcodes.ASM5, mv, access, name, desc) {
+
+                @Override
+                void visitCode() {
+                    super.visitCode()
+//                    super.visitMethodInsn(INVOKESTATIC, "com/example/transformtest/Test", "test1", "(V)V")
+
+                }
+
+                @Override
+                protected void onMethodEnter() {
+                    super.onMethodEnter()
+                    println('aaaaa')
+//                    visitVarInsn(ALOAD, 1);
+                    invokeStatic(Type.getObjectType("com/example/transformtest/Test"), new Method("test1", "()V"));
+                }
+
+                @Override
+                void visitEnd() {
+                    println('bbbbb')
+                    super.visitEnd()
+                }
+            }
+            return newMv
+        }
+    }
+
+
+    static class MyVisitorClick extends ClassVisitor {
+
+        MyVisitorClick(int i, ClassVisitor classVisitor) {
+            super(i, classVisitor)
+        }
+
+        @Override
+        void visit(int i, int i1, String s, String s1, String s2, String[] strings) {
+            super.visit(i, i1, s, s1, s2, strings)
+        }
+
+        @Override
+        MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] strings) {
+            if (!"onClick".equals(name)) {
+                return super.visitMethod(access, name, desc, signature, strings)
+            }
+
+            MethodVisitor mv = super.visitMethod(access, name, desc, signature, strings)
+
+            AdviceAdapter newMv = new AdviceAdapter(Opcodes.ASM5, mv, access, name, desc) {
+
+                @Override
+                void visitCode() {
+                    super.visitCode()
+//                    super.visitMethodInsn(INVOKESTATIC, "com/example/transformtest/Test", "test1", "(V)V")
+
+                }
+
+                @Override
+                protected void onMethodEnter() {
+                    super.onMethodEnter()
+                    println('aaaaa')
+//                    visitVarInsn(ALOAD, 1);
+                    invokeStatic(Type.getObjectType("com/example/transformtest/Test"), new Method("test2", "()V"));
+                }
+
+                @Override
+                void visitEnd() {
+                    println('bbbbb')
+                    super.visitEnd()
+                }
+            }
+            return newMv
+
+        }
+    }
+
+
+    public static byte[] getByteArrayFromFile(file) {
+        byte[] buffer = null;
+        FileInputStream fis = null;
+        try {
+            fis = new FileInputStream(file);
+            ByteArrayOutputStream bos = new ByteArrayOutputStream(1000);
+            byte[] b = new byte[1000];
+            int n;
+            while ((n = fis.read(b)) != -1) {
+                bos.write(b, 0, n);
+            }
+            fis.close();
+            bos.close();
+            buffer = bos.toByteArray();
+        } catch (FileNotFoundException e) {
+        } catch (IOException e) {
+        }
+        return buffer;
+    }
+
+    public static void writeToFile(File file, byte[] out) {
+        if (file != null && file.exists() && out != null && out.length > 0) {
+            BufferedOutputStream bos = null;
+            FileOutputStream fos = null;
+            try {
+                fos = new FileOutputStream(file);
+                bos = new BufferedOutputStream(fos);
+                bos.write(out);
+            } catch (Exception e) {
+            } finally {
+                if (bos != null) {
+                    try {
+                        bos.close();
+                    } catch (IOException e1) {
+                    }
+                }
+                if (fos != null) {
+                    try {
+                        fos.close();
+                    } catch (IOException e1) {
+                    }
+                }
+            }
+        }
+    }
+
+
+}
+
+
+dependencies {
+    compile fileTree(dir: 'libs', include: ['*.jar'])
+    androidTestCompile('com.android.support.test.espresso:espresso-core:2.2.2', {
+        exclude group: 'com.android.support', module: 'support-annotations'
+    })
+    compile 'com.android.support:appcompat-v7:26.+'
+    compile 'com.android.support.constraint:constraint-layout:1.0.2'
+    testCompile 'junit:junit:4.12'
+}

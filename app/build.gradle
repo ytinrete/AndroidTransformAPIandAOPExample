@@ -4,6 +4,9 @@ apply plugin: 'com.android.application'
 import com.android.annotations.NonNull
 import com.android.build.api.transform.*
 import com.android.build.gradle.internal.pipeline.TransformManager
+import javassist.ClassPool
+import javassist.CtClass
+import javassist.CtMethod
 import org.apache.commons.io.FileUtils
 import org.objectweb.asm.*
 import org.objectweb.asm.commons.AdviceAdapter
@@ -94,23 +97,38 @@ class MyTransform extends Transform {
             File file = (File) iter.next();
 
             if ("MainActivity.class".equals(file.getName())) {
+
+                //ASM
+                println("ASM manipulate")
                 byte[] src = getByteArrayFromFile(file)
                 ClassReader cr = new ClassReader(src)
                 ClassWriter cw = new ClassWriter(cr, 0)
-
                 ClassVisitor cv = cw;
                 cv = new MyVisitorHello(Opcodes.ASM5, cv)
                 cr.interfaces.each { interfaceName ->
                     println("class impl:" + interfaceName)
-
-                    if(interfaceName.equals("android/view/View\$OnClickListener")) {
+                    if (interfaceName.equals("android/view/View\$OnClickListener")) {
                         cv = new MyVisitorClick(Opcodes.ASM5, cv)
                     }
                 }
-
                 cr.accept(cv, ClassReader.EXPAND_FRAMES | ClassReader.SKIP_FRAMES)
                 byte[] res = cw.toByteArray();
                 this.writeToFile(file, res)
+
+                //JavaAssist
+                println("JavaAssist manipulate")
+
+                ClassPool pool = new ClassPool()
+                println(rootFolder)
+                pool.insertClassPath(rootFolder + "/")
+                CtClass cc = pool.get("com.example.transformtest.MainActivity")
+
+                CtMethod m = cc.getDeclaredMethod("hello2");
+                m.insertBefore("{ com.example.transformtest.Test.test3(); }");
+//                cc.writeFile();
+
+                byte[] res2 = cc.toBytecode()
+                this.writeToFile(file, res2)
 
 
             }

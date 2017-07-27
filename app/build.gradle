@@ -11,6 +11,9 @@ import org.apache.commons.io.FileUtils
 import org.objectweb.asm.*
 import org.objectweb.asm.commons.AdviceAdapter
 import org.objectweb.asm.commons.Method
+import org.aspectj.bridge.IMessage
+import org.aspectj.bridge.MessageHandler
+import org.aspectj.tools.ajc.Main
 
 android {
     compileSdkVersion 26
@@ -31,6 +34,43 @@ android {
     }
 
     registerTransform(new MyTransform())
+
+    applicationVariants.all { variant ->
+        JavaCompile javaCompile = variant.getJavaCompiler()
+        javaCompile.doLast {
+            println("Aspactj manipulate")
+            String[] args = ["-showWeaveInfo",
+                             "-1.8",
+                             "-inpath", javaCompile.destinationDir.toString(),
+                             "-aspectpath", javaCompile.classpath.asPath,
+                             "-d", javaCompile.destinationDir.toString(),
+                             "-classpath", javaCompile.classpath.asPath,
+                             "-bootclasspath", project.android.bootClasspath.join(File.pathSeparator)]
+
+            MessageHandler handler = new MessageHandler(true);
+            new Main().run(args, handler)
+
+            def log = project.logger
+            for (IMessage message : handler.getMessages(null, true)) {
+                switch (message.getKind()) {
+                    case IMessage.ABORT:
+                    case IMessage.ERROR:
+                    case IMessage.FAIL:
+                        log.error message.message, message.thrown
+                        break;
+                    case IMessage.WARNING:
+                    case IMessage.INFO:
+                        log.info message.message, message.thrown
+                        break;
+                    case IMessage.DEBUG:
+                        log.debug message.message, message.thrown
+                        break;
+                }
+            }
+        }
+
+    }
+
 }
 
 
@@ -290,4 +330,5 @@ dependencies {
     compile 'com.android.support:appcompat-v7:26.+'
     compile 'com.android.support.constraint:constraint-layout:1.0.2'
     testCompile 'junit:junit:4.12'
+    compile 'org.aspectj:aspectjrt:1.8.1'
 }

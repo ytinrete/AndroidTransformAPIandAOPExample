@@ -14,6 +14,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     setContentView(R.layout.activity_main);
     hello();
     hello2(111);
+    hello3();
     findViewById(R.id.btn).setOnClickListener(this);
   }
 
@@ -28,6 +29,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
   private void hello2(int aaa) {
     Log.d("xxxx", "hello2:" + aaa);
+  }
+
+  private void hello3() {
+    Log.d("xxxx", "hello3");
   }
 
 
